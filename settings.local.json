@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install pymupdf)",
+      "Bash(python -c \":*)",
+      "Bash(py -c \":*)"
+    ]
+  }
+}
