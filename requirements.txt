@@ -1,6 +1,0 @@
-# Medizin Lernhelfer – Abhängigkeiten
-# Installieren mit: pip install -r requirements.txt
-
-customtkinter>=5.2.2
-anthropic>=0.34.0
-reportlab>=4.2.0
