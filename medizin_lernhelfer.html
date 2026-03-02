@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medizin Lernhelfer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --mint:#4daf8e;
+  --dark:#2a473b;
+  --sage:#6c887c;
+  --bg:#f4f7f5;
+  --white:#ffffff;
+  --text:#1a2e24;
+  --muted:#5a7568;
+  --s-bg:#eaf0ec;
+  --m-bg:#e0f2ea;
+  --radius:10px;
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;display:flex;flex-direction:column;
+}
+.hidden{display:none!important}
+
+/* ── Header ─────────────────────────── */
+#app-header{
+  background:var(--dark);color:#fff;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;height:64px;flex-shrink:0;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 10px rgba(0,0,0,.25);
+}
+#header-left{display:flex;align-items:center;gap:18px}
+#header-title{font-size:21px;font-weight:700;letter-spacing:.3px}
+#disease-badge{
+  background:var(--mint);color:var(--dark);
+  padding:4px 14px;border-radius:20px;
+  font-size:13px;font-weight:700;
+}
+.hdr-btn{
+  background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.3);
+  color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;
+  font-size:14px;transition:background .2s;white-space:nowrap;
+}
+.hdr-btn:hover{background:rgba(255,255,255,.22)}
+
+/* ── Progress ───────────────────────── */
+#progress-wrap{
+  background:var(--white);border-bottom:1px solid #d4ddd8;
+  padding:10px 28px;display:flex;align-items:center;gap:16px;flex-shrink:0;
+}
+#progress-label{font-size:13px;color:var(--muted);white-space:nowrap}
+#progress-track{flex:1;height:6px;background:#d4ddd8;border-radius:99px;overflow:hidden}
+#progress-fill{height:100%;background:var(--mint);border-radius:99px;transition:width .4s}
+#progress-dots{display:flex;gap:5px;flex-shrink:0}
+.dot{width:10px;height:10px;border-radius:50%;background:#c8d5cd;transition:background .3s}
+.dot.done{background:var(--mint)}
+.dot.current{background:var(--dark)}
+
+/* ── Main ───────────────────────────── */
+#app-main{flex:1;overflow-y:auto}
+.screen{max-width:960px;margin:0 auto;padding:40px 28px 80px}
+
+/* ── Buttons ────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:12px 24px;border-radius:8px;border:none;cursor:pointer;
+  font-size:15px;font-weight:600;transition:all .15s;
+}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-mint{background:var(--mint);color:var(--dark)}
+.btn-mint:hover:not(:disabled){background:#3d9a7a}
+.btn-dark{background:var(--dark);color:#fff}
+.btn-dark:hover:not(:disabled){background:#1e3a2e}
+.btn-outline{background:transparent;color:var(--dark);border:2px solid var(--sage)}
+.btn-outline:hover:not(:disabled){background:#e4ece7}
+.btn-ghost{background:transparent;color:var(--sage);border:1.5px solid #c8d5cd}
+.btn-ghost:hover:not(:disabled){background:#eef2ef}
+.btn-lg{padding:15px 34px;font-size:17px}
+.btn-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:16px}
+
+/* ── Welcome ────────────────────────── */
+#screen-welcome h1{font-size:34px;font-weight:800;color:var(--dark);margin-bottom:8px}
+.subtitle{font-size:17px;color:var(--muted);margin-bottom:36px}
+.disease-grid{display:flex;flex-direction:column;gap:14px}
+.disease-btn{
+  background:var(--dark);color:#fff;
+  border:none;border-radius:14px;
+  padding:24px 30px;font-size:20px;font-weight:700;
+  cursor:pointer;text-align:left;display:flex;align-items:center;gap:16px;
+  transition:all .2s;box-shadow:0 3px 12px rgba(42,71,59,.2);
+}
+.disease-btn:hover{background:var(--sage);transform:translateY(-2px)}
+.disease-btn:active{transform:scale(.98)}
+.disease-btn .icon{font-size:30px}
+
+/* ── Schema (progressiver Aufbau) ──── */
+#schema-body{display:flex;flex-direction:column;gap:0}
+
+.schema-row{
+  margin-bottom:6px;
+  border-radius:var(--radius);overflow:hidden;
+  box-shadow:0 1px 5px rgba(42,71,59,.1);
+}
+.schema-row.done{opacity:1}
+.schema-row.active{
+  box-shadow:0 2px 16px rgba(77,175,142,.25);
+  border:2px solid var(--mint);
+}
+
+.row-header{
+  background:var(--dark);color:#fff;
+  padding:12px 20px;font-size:15px;font-weight:700;
+  display:flex;align-items:center;gap:10px;
+}
+.row-header .cat-num{
+  background:var(--mint);color:var(--dark);
+  width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:800;flex-shrink:0;
+}
+
+.row-columns{
+  display:grid;grid-template-columns:1fr 1fr;gap:0;
+}
+.row-col{display:flex;flex-direction:column}
+.col-head{
+  padding:8px 16px;font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.6px;
+}
+.col-student .col-head{background:var(--sage);color:#fff}
+.col-model .col-head{background:var(--mint);color:var(--dark)}
+.col-text{
+  padding:14px 16px;font-size:14px;line-height:1.7;
+  white-space:pre-wrap;min-height:60px;flex:1;
+}
+.col-student .col-text{background:var(--s-bg);color:#2a3e33}
+.col-model .col-text{background:var(--m-bg);color:#1e3a2a}
+
+.col-text.empty{font-style:italic;color:var(--sage)}
+
+/* ── Input section (within active row) */
+.input-section{
+  background:var(--white);padding:20px;
+}
+.input-label{font-size:14px;font-weight:700;color:var(--muted);margin-bottom:8px}
+#student-input{
+  width:100%;min-height:160px;padding:14px;
+  font-size:17px;line-height:1.6;
+  border:2px solid var(--sage);border-radius:8px;
+  background:var(--s-bg);resize:vertical;
+  font-family:inherit;color:var(--text);transition:border-color .2s;
+}
+#student-input:focus{outline:none;border-color:var(--mint);background:#fff}
+
+/* ── Export section ─────────────────── */
+.export-section{
+  background:var(--white);border-radius:var(--radius);
+  padding:36px;text-align:center;margin-top:24px;
+  box-shadow:0 2px 12px rgba(42,71,59,.12);
+}
+.export-title{
+  font-size:24px;font-weight:800;color:var(--dark);margin-bottom:8px;
+}
+.export-sub{font-size:15px;color:var(--muted);margin-bottom:24px}
+
+/* ── Responsive ─────────────────────── */
+@media(max-width:680px){
+  .screen{padding:20px 14px 60px}
+  #screen-welcome h1{font-size:26px}
+  .disease-btn{font-size:17px;padding:18px 20px}
+  .row-columns{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════ HEADER ════════ -->
+<header id="app-header">
+  <div id="header-left">
+    <div id="header-title">Medizin Lernhelfer</div>
+    <div id="disease-badge" class="hidden"></div>
+  </div>
+  <button id="btn-overview" class="hdr-btn hidden" onclick="backToOverview()">
+    ← Zur Übersicht
+  </button>
+</header>
+
+<!-- Fortschritt -->
+<div id="progress-wrap" class="hidden">
+  <span id="progress-label">1 / 9</span>
+  <div id="progress-track"><div id="progress-fill" style="width:11%"></div></div>
+  <div id="progress-dots"></div>
+</div>
+
+<!-- ════════ SCREENS ════════ -->
+<main id="app-main">
+
+  <!-- WILLKOMMEN -->
+  <div id="screen-welcome" class="screen">
+    <h1>Hauttumoren</h1>
+    <p class="subtitle">Erkrankung auswählen – Schema Schritt für Schritt aufbauen – Musterlösung vergleichen</p>
+    <div class="disease-grid">
+      <button class="disease-btn" onclick="startSession('Basalzellkarzinom')">
+        <span class="icon">🔬</span> Basalzellkarzinom
+      </button>
+      <button class="disease-btn" onclick="startSession('Plattenepithelkarzinom der Haut')">
+        <span class="icon">🩺</span> Plattenepithelkarzinom der Haut
+      </button>
+      <button class="disease-btn" onclick="startSession('Malignes Melanom')">
+        <span class="icon">🏥</span> Malignes Melanom
+      </button>
+    </div>
+  </div>
+
+  <!-- SCHEMA (progressiver Aufbau) -->
+  <div id="screen-schema" class="screen hidden">
+    <div id="schema-body"></div>
+  </div>
+
+</main>
+
+<!-- ════════ JAVASCRIPT ════════ -->
+<script>
+'use strict';
+
+// ── Kategorien ────────────────────────────────────────
+const CATEGORIES = [
+  'Definition','Pathophysiologie','Ätiologie',
+  'Symptome','Diagnose','Differenzialdiagnose',
+  'Therapie','Komplikationen','Prognose'
+];
+
+// ── Wissensbasis (aus 02_Krankheitsschema_Hauttumoren) ─
+const KB = {
+
+'Basalzellkarzinom': {
+'Definition':
+`• Häufigster bösartiger Hauttumor
+• Geht von basalen Zellen der Epidermis und den Wurzelscheiden der Haarfollikel aus
+• Gilt als semimaligne (\u201Ehalb-bösartig\u201C): wächst infiltrativ und destruierend, bildet aber keine Metastasen`,
+
+'Pathophysiologie':
+`• Langsames, lokal infiltrierendes Wachstum in umliegendes Gewebe
+• Keine Fernmetastasierung
+• In sehr fortgeschrittenen Stadien: Infiltration tiefer Strukturen wie Muskulatur, Knochen und Organe möglich`,
+
+'Ätiologie':
+`• Genetische Veranlagung (vererbte Prädisposition)
+• Chronische UV-Exposition (wichtigster externer Risikofaktor)
+• Betrifft v.\u202Fa. Menschen mit sonnenempfindlichem Hauttyp
+• Weitere Risikofaktoren: medikamentöse Immunsuppression, Chemikalien (v.\u202Fa. Arsen), ionisierende Strahlung, chronische Hautschäden (Narben, Druckstellen)
+• Erkrankung des älteren Menschen; tritt v.\u202Fa. an Stirn, Ohrmuschel und Wangen auf`,
+
+'Symptome':
+`• Keine Vorstufen (Präkanzerosen)
+• Beginn: kleine, hautfarbene Verhärtung, die häufig aufgekratzt wird (\u201Enicht heilende Wunde oder Kruste\u201C)
+• Im Verlauf: kugelige Knötchen mit perlschnurartigem Randsaum und perlmutartigem Glanz
+• Teleangiektasien (Kapillarerweiterungen) in der Umgebung
+• Später: Ulzeration; Zerstörung von Knochen und Muskulatur möglich`,
+
+'Diagnose':
+`• Klinisches Bild oft wegweisend
+• Sicherung der Diagnose durch Probebiopsie oder Exzision mit histologischer Untersuchung`,
+
+'Differenzialdiagnose':
+`• Plattenepithelkarzinom
+• Chronische Wunden und nicht heilende Hautveränderungen
+• Gutartige Tumoren (z.\u202FB. Fibrome)
+• Entzündliche Dermatosen`,
+
+'Therapie':
+`• Therapie der Wahl: vollständige chirurgische Entfernung mit Sicherheitsabstand (mikroskopisch kontrollierte Chirurgie, MKC)
+• Oberflächliche Basaliome: lokale Immuntherapie mit Imiquimod-Creme oder photodynamische Therapie
+• Bei alten/multimorbiden Patienten: Strahlentherapie
+• Weit fortgeschrittene, inoperable Tumoren: orales Vismodegib (Erivedge)
+• Bei Infiltration von Knochen oder Organen: interdisziplinäres Vorgehen erforderlich`,
+
+'Komplikationen':
+`• Lokale Rezidive nach unvollständiger Resektion
+• In weit fortgeschrittenen Fällen: Infiltration lebenswichtiger Strukturen (z.\u202FB. große Gefäße, Schädelbasis) \u2192 lebensbedrohlicher Verlauf möglich`,
+
+'Prognose':
+`• Bei frühzeitiger, vollständiger Entfernung: gut (keine Metastasierung)
+• Bei weit fortgeschrittenem Tumor mit Infiltration vitaler Strukturen: lebensbedrohlich`
+},
+
+'Plattenepithelkarzinom der Haut': {
+'Definition':
+`• Zweithäufigster bösartiger Tumor von Haut und Schleimhäuten
+• Auch bekannt als: Spinaliom, Stachelzellkarzinom, spinozelluläres Karzinom
+• Wächst infiltrierend und destruierend
+• Kann metastasieren (meist über die Lymphwege)`,
+
+'Pathophysiologie':
+`• Wiederholte DNA-Schäden in Haut-Stammzellen führen zu unkontrollierter Zellvermehrung
+• Lokal destruierendes Wachstum
+• Metastasierung bevorzugt lymphogen in regionale Lymphknoten, später hämatogen möglich`,
+
+'Ätiologie':
+`• UV-Strahlung (häufigste Ursache), Röntgenstrahlung
+• Chronische Entzündungen, wiederholte mechanische Beanspruchung der Haut
+• Chemikalien
+• Betrifft v.\u202Fa. Menschen mit sonnenempfindlicher Haut; Männer häufiger als Frauen; Erkrankungsalter ca. 70 Jahre
+• Typische Lokalisationen: Glatze, Stirn, Nase, Wangen, Unterlippe, Ohrmuscheln, Hände, Arme
+• Häufige Präkanzerosen: aktinische Keratose (Carcinoma in situ der Epidermis, gerötete raue Herde) und Morbus Bowen (Carcinoma in situ der Haut, rote schuppige Herde)`,
+
+'Symptome':
+`• Anfangsstadium: verdickte, schuppige, leicht verletzliche Haut
+• Später: derber, hautfarbener Knoten, der bei leichter Berührung stark blutet
+• Auch Schleimhäute betroffen möglich (v.\u202Fa. Lippen, Genitalbereich)`,
+
+'Diagnose':
+`• Sicherung der Diagnose nur histologisch (Biopsie)
+• Jede nicht abheilende Hautveränderung ist verdächtig \u2192 Probeexzision
+• Bei gesichertem Befund: Abtasten und ggf. Sonografie des Lymphabflussgebiets
+• Bei größeren Tumoren: weitere Untersuchungen zum Ausschluss von Fernmetastasen`,
+
+'Differenzialdiagnose':
+`• Basalzellkarzinom
+• Malignes Melanom
+• Chronische Wunden und entzündliche Dermatosen
+• Präkanzerosen (aktinische Keratose, Morbus Bowen)`,
+
+'Therapie':
+`• Therapie der Wahl: vollständige chirurgische Entfernung mit Sicherheitsabstand
+• Alternativ: Strahlentherapie (bei inoperablen oder schlecht erreichbaren Tumoren)
+• Bei Metastasierung: Chemotherapie, ggf. kombiniert mit Strahlentherapie; EGFR-Inhibitoren; PD1-Inhibitoren`,
+
+'Komplikationen':
+`• Lymphogene Metastasierung in regionale Lymphknoten
+• Hämatogene Fernmetastasierung in weitere Organe
+• Lokale Destruktion tiefer Gewebestrukturen`,
+
+'Prognose':
+`• Bei frühzeitiger, vollständiger Entfernung: gut
+• Mit zunehmender Tumorgröße und Lymphknotenbefall: Prognose verschlechtert sich
+• Bei Fernmetastasierung: nicht mehr kurativ behandelbar`
+},
+
+'Malignes Melanom': {
+'Definition':
+`• Sehr bösartiger Hauttumor (\u201ESchwarzer Hautkrebs\u201C)
+• Geht von den Melanozyten (pigmentbildende Zellen der Haut) aus
+• Gefährlichster der häufigen Hauttumoren: metastasiert sehr früh`,
+
+'Pathophysiologie':
+`• Entsteht meist auf gesunder Haut; 20\u201350 % gehen aus Vorläuferläsionen (z.\u202FB. Nävus) hervor
+• Sehr frühzeitige Metastasierung sowohl lymphogen als auch hämatogen möglich
+• Kann praktisch alle Organe befallen`,
+
+'Ätiologie':
+`• Intensive Sonnenexposition (wichtigster Risikofaktor)
+• Besonders betroffen: hellhäutige Menschen mit empfindlichem Hauttyp
+• Sonnenbrände in der Kindheit: besonderes Risiko
+• Genetische Prädisposition (u.\u202Fa. BRAF-Mutation)`,
+
+'Symptome':
+`• ABCDE-Regel zur klinischen Erkennung:
+  \u2013 A \u2013 Asymmetrie der Läsion
+  \u2013 B \u2013 Begrenzung: unregelmäßig, polyzyklisch
+  \u2013 C \u2013 Colour (Farbe): mehrere Farben (Brauntöne, Grau, Blau, Weiß)
+  \u2013 D \u2013 Durchmesser: > 5 mm verdächtig
+  \u2013 E \u2013 Entwicklung: Veränderung des Herdes, Erhabenheit
+• Weitere Warnsignale: Juckreiz, Blutung bei leichten Reizen
+• Typische Lokalisationen: Rücken, Brust, obere Extremität
+• Untypische Lokalisationen (Fußsohle, Nägel): werden oft spät erkannt
+• Amelanotische Melanome: hautfarben oder rötlich \u2192 schwer zu diagnostizieren`,
+
+'Diagnose':
+`• Klinischer Verdacht nach ABCDE-Regel \u2192 Auflichtmikroskopie (Dermatoskopie)
+• Bei erhärtetem Verdacht: Exzisionsbiopsie (vollständige Entfernung + histologische Aufarbeitung)
+• Probebiopsie ist kontraindiziert (Gefahr der Tumorzellverschleppung!)
+• Je nach Tumordicke: Darstellung und histologische Untersuchung des Sentinel-Lymphknotens`,
+
+'Differenzialdiagnose':
+`• Atypische (dysplastische) Nävi
+• Seborrhoische Keratosen
+• Hämangiome
+• Amelanotische Varianten des Basalzellkarzinoms`,
+
+'Therapie':
+`• Therapie der Wahl: vollständige chirurgische Entfernung mit tumordickenabhängigem Sicherheitsabstand
+• Bei Befall des Sentinel-Lymphknotens: radikale regionäre Lymphadenektomie
+• In metastasierten Stadien (palliativ):
+  \u2013 Checkpoint-Inhibitoren (z.\u202FB. anti-PD1-Antikörper)
+  \u2013 Bei BRAF-Mutation: BRAF- und MEK-Inhibitoren (Kinaseinhibitoren)
+  \u2013 Chemotherapie: nur noch selten eingesetzt`,
+
+'Komplikationen':
+`• Frühzeitige lymphogene und hämatogene Metastasierung (Lunge, Leber, Gehirn, Knochen)
+• Rezidive: meist in den ersten 5 Jahren nach Behandlung
+• Hirnmetastasen: erhebliche Verschlechterung der Prognose`,
+
+'Prognose':
+`• Hängt entscheidend von der Tumordicke (Breslow) ab
+• Bei früher Erkennung und vollständiger Entfernung: sehr gut
+• Bei Tumordicke > 4 mm oder Metastasierung: schlecht`
+}
+};
+
+// ── State ─────────────────────────────────────────────
+let currentDisease  = '';
+let currentCatIdx   = 0;
+let sessionData     = [];   // [{category, studentText, modelText}]
+let showingCompare  = false;
+
+// ── Screen navigation ─────────────────────────────────
+function showScreen(id) {
+  ['screen-welcome','screen-schema'].forEach(s =>
+    document.getElementById(s).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+
+  const isSchema = id === 'screen-schema';
+  document.getElementById('progress-wrap').classList.toggle('hidden', !isSchema);
+  document.getElementById('btn-overview').classList.toggle('hidden', !isSchema);
+  document.getElementById('disease-badge').classList.toggle('hidden', !isSchema);
+}
+
+function backToOverview() {
+  showScreen('screen-welcome');
+  document.getElementById('disease-badge').textContent = '';
+}
+
+// ── Session start ─────────────────────────────────────
+function startSession(disease) {
+  currentDisease = disease;
+  currentCatIdx  = 0;
+  sessionData    = [];
+  showingCompare = false;
+
+  document.getElementById('disease-badge').textContent = disease;
+  showScreen('screen-schema');
+  renderSchema();
+}
+
+// ── Schema rendering (the core) ───────────────────────
+function renderSchema() {
+  const container = document.getElementById('schema-body');
+  const total     = CATEGORIES.length;
+  const current   = Math.min(currentCatIdx + 1, total);
+  let html = '';
+
+  // 1) Completed rows
+  for (let i = 0; i < currentCatIdx; i++) {
+    const d = sessionData[i];
+    if (!d) continue;
+    html += completedRowHTML(i, d);
+  }
+
+  // 2) Active row OR export section
+  if (currentCatIdx < total) {
+    if (showingCompare) {
+      html += compareRowHTML(currentCatIdx, sessionData[currentCatIdx]);
+    } else {
+      html += inputRowHTML(currentCatIdx);
+    }
+  } else {
+    html += exportHTML();
+  }
+
+  container.innerHTML = html;
+  updateProgress();
+
+  // Scroll to active/export
+  requestAnimationFrame(() => {
+    const target = document.getElementById('active-row')
+      || document.querySelector('.export-section');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function completedRowHTML(idx, d) {
+  const num  = idx + 1;
+  const cat  = d.category;
+  const sText = d.studentText || '';
+  const mText = d.modelText  || '';
+  return `
+  <div class="schema-row done">
+    <div class="row-header">
+      <span class="cat-num">${num}</span> ${esc(cat)}
+    </div>
+    <div class="row-columns">
+      <div class="row-col col-student">
+        <div class="col-head">Schülerantwort</div>
+        <div class="col-text${sText ? '' : ' empty'}">${sText ? esc(sText) : '(keine Eingabe)'}</div>
+      </div>
+      <div class="row-col col-model">
+        <div class="col-head">Musterlösung (i care)</div>
+        <div class="col-text">${esc(mText)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function inputRowHTML(idx) {
+  const num = idx + 1;
+  const cat = CATEGORIES[idx];
+  const saved = sessionData[idx]?.studentText || '';
+  const isLast = idx === CATEGORIES.length - 1;
+  return `
+  <div class="schema-row active" id="active-row">
+    <div class="row-header">
+      <span class="cat-num">${num}</span> ${esc(cat)}
+    </div>
+    <div class="input-section">
+      <div class="input-label">Schülerantwort eingeben:</div>
+      <textarea id="student-input" placeholder="Schülerantworten hier eingeben\u2026">${esc(saved)}</textarea>
+      <div class="btn-row">
+        <button class="btn btn-mint btn-lg" onclick="showModel()">
+          Musterlösung anzeigen \u2192
+        </button>
+        <button class="btn btn-ghost" onclick="skipCategory()">Überspringen</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function compareRowHTML(idx, d) {
+  const num  = idx + 1;
+  const cat  = d.category;
+  const sText = d.studentText || '';
+  const mText = d.modelText  || '';
+  const isLast = idx === CATEGORIES.length - 1;
+  const nextLabel = isLast
+    ? 'Schema abschließen \u2192'
+    : `Weiter: ${idx + 2}. ${CATEGORIES[idx + 1]} \u2192`;
+  return `
+  <div class="schema-row active" id="active-row">
+    <div class="row-header">
+      <span class="cat-num">${num}</span> ${esc(cat)}
+    </div>
+    <div class="row-columns">
+      <div class="row-col col-student">
+        <div class="col-head">Schülerantwort</div>
+        <div class="col-text${sText ? '' : ' empty'}">${sText ? esc(sText) : '(keine Eingabe)'}</div>
+      </div>
+      <div class="row-col col-model">
+        <div class="col-head">Musterlösung (i care)</div>
+        <div class="col-text">${esc(mText)}</div>
+      </div>
+    </div>
+    <div style="padding:14px 20px;background:var(--white);display:flex;gap:12px;flex-wrap:wrap">
+      <button class="btn btn-dark btn-lg" onclick="nextCategory()">${nextLabel}</button>
+      <button class="btn btn-ghost" onclick="backToInput()" style="font-size:13px">\u2190 Neu eingeben</button>
+    </div>
+  </div>`;
+}
+
+function exportHTML() {
+  return `
+  <div class="export-section">
+    <div class="export-title">Schema vollständig!</div>
+    <div class="export-sub">Alle 9 Kategorien bearbeitet \u2013 du kannst jetzt nach oben scrollen und das gesamte Schema durchsehen.</div>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn btn-dark btn-lg" onclick="exportPDF()">
+        Als PDF exportieren
+      </button>
+      <button class="btn btn-outline" onclick="backToOverview()">
+        \u2190 Zur Übersicht
+      </button>
+    </div>
+  </div>`;
+}
+
+// ── Progress bar ──────────────────────────────────────
+function updateProgress() {
+  const total   = CATEGORIES.length;
+  const done    = Math.min(currentCatIdx + (showingCompare ? 1 : 0), total);
+  const current = Math.min(currentCatIdx + 1, total);
+
+  document.getElementById('progress-label').textContent = `${current} / ${total}`;
+  document.getElementById('progress-fill').style.width =
+    `${Math.round(done / total * 100)}%`;
+
+  const dots = document.getElementById('progress-dots');
+  dots.innerHTML = '';
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot'
+      + (i < currentCatIdx ? ' done' : i === currentCatIdx ? ' current' : '');
+    dots.appendChild(d);
+  }
+}
+
+// ── Actions ───────────────────────────────────────────
+function showModel() {
+  const text  = document.getElementById('student-input').value.trim();
+  const cat   = CATEGORIES[currentCatIdx];
+  const model = KB[currentDisease]?.[cat] || '(kein Eintrag in Wissensbasis)';
+
+  sessionData[currentCatIdx] = { category: cat, studentText: text, modelText: model };
+  showingCompare = true;
+  renderSchema();
+}
+
+function backToInput() {
+  showingCompare = false;
+  renderSchema();
+}
+
+function nextCategory() {
+  showingCompare = false;
+  currentCatIdx++;
+  renderSchema();
+}
+
+function skipCategory() {
+  const text  = (document.getElementById('student-input')?.value || '').trim();
+  const cat   = CATEGORIES[currentCatIdx];
+  const model = KB[currentDisease]?.[cat] || '';
+
+  sessionData[currentCatIdx] = { category: cat, studentText: text, modelText: model };
+  currentCatIdx++;
+  renderSchema();
+}
+
+// ── PDF Export ────────────────────────────────────────
+function exportPDF() {
+  if (!window.jspdf) { alert('jsPDF nicht geladen.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+  const W = 210, M = 14, today = new Date().toLocaleDateString('de-DE');
+  const COL = (W - M * 2 - 4) / 2;
+  let y = 0;
+
+  function check(need) { if (y + need > 278) { doc.addPage(); y = 16; } }
+
+  // Title bar
+  doc.setFillColor(42, 71, 59);
+  doc.rect(0, 0, W, 20, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text(currentDisease, M, 13);
+  doc.setFont('helvetica','normal'); doc.setFontSize(9);
+  doc.text(today, W - M, 13, { align: 'right' });
+  y = 26;
+
+  // Legend
+  doc.setFontSize(8); doc.setTextColor(90, 90, 90);
+  doc.setFillColor(234, 240, 236); doc.rect(M, y, 6, 3.5, 'F');
+  doc.text('Schülerantwort', M + 8, y + 2.8);
+  doc.setFillColor(224, 242, 234); doc.rect(M + 48, y, 6, 3.5, 'F');
+  doc.text('Musterlösung (i care)', M + 56, y + 2.8);
+  y += 9;
+
+  sessionData.forEach((d, idx) => {
+    if (!d) return;
+    check(30);
+
+    // Category header
+    doc.setFillColor(42, 71, 59);
+    doc.rect(M, y, W - M * 2, 7, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(10);
+    doc.text(`${idx + 1}. ${d.category}`, M + 3, y + 5);
+    y += 7;
+
+    // Column headers
+    const xL = M, xR = M + COL + 4;
+    doc.setFillColor(108, 136, 124);
+    doc.rect(xL, y, COL, 5.5, 'F');
+    doc.setFillColor(77, 175, 142);
+    doc.rect(xR, y, COL, 5.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5);
+    doc.text('SCHÜLERANTWORT', xL + 3, y + 3.8);
+    doc.text('MUSTERLÖSUNG (I CARE)', xR + 3, y + 3.8);
+    y += 5.5;
+
+    // Content
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    const sLines = doc.splitTextToSize(d.studentText || '(keine Eingabe)', COL - 6);
+    const mLines = doc.splitTextToSize(d.modelText  || '', COL - 6);
+    const lineH  = 4.2;
+    const rowH   = Math.max(sLines.length, mLines.length) * lineH + 10;
+
+    check(rowH + 4);
+
+    doc.setFillColor(234, 240, 236);
+    doc.rect(xL, y, COL, rowH, 'F');
+    doc.setFillColor(224, 242, 234);
+    doc.rect(xR, y, COL, rowH, 'F');
+    doc.setDrawColor(180, 200, 188);
+    doc.rect(xL, y, COL, rowH, 'S');
+    doc.rect(xR, y, COL, rowH, 'S');
+
+    doc.setTextColor(40, 60, 48);
+    doc.text(sLines, xL + 3, y + 5);
+    doc.setTextColor(30, 58, 42);
+    doc.text(mLines, xR + 3, y + 5);
+
+    y += rowH + 5;
+  });
+
+  // Footer on all pages
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(180, 200, 188);
+    doc.line(M, 286, W - M, 286);
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    doc.setTextColor(160, 160, 160);
+    doc.text(`Medizin Lernhelfer \u00B7 ${today}`, M, 290);
+    doc.text(`${p} / ${pages}`, W - M, 290, { align: 'right' });
+  }
+
+  doc.save(`${currentDisease.replace(/ /g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
+// ── Helpers ───────────────────────────────────────────
+function esc(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+</script>
+</body>
+</html>
